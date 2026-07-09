@@ -5,7 +5,8 @@
 // -----------------------------------------------------------------------------
 BEGIN_VKW_SUPPRESS_WARNING
 #include <SPIRV/GlslangToSpv.h>
-#include <StandAlone/ResourceLimits.h>
+#include <glslang/Public/ResourceLimits.h>
+#include <glslang/Public/ShaderLang.h>
 #if defined(__ANDROID__)
 #include <android/log.h>
 #endif
@@ -24,7 +25,7 @@ END_VKW_SUPPRESS_WARNING
 
 #if VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL == 1
 // Global Storage for Dynamic loader
-vk::DynamicLoader g_dynamic_loader;
+vk::detail::DynamicLoader g_dynamic_loader;
 // Global Storage for Dispatcher
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 #else
@@ -618,7 +619,7 @@ std::vector<uint32_t> CompileGLSL(const vk::ShaderStageFlagBits &vk_stage,
     shader.setStrings(source_strs, 1);
 
     // Parse GLSL with SPIR-V and Vulkan rules
-    if (!shader.parse(&glslang::DefaultTBuiltInResource, 100, false, RULES)) {
+    if (!shader.parse(GetDefaultResources(), 100, false, RULES)) {
         ThrowShaderErr("Failed to parse GLSL", shader, source);
     }
 
@@ -1017,8 +1018,8 @@ vk::UniqueSurfaceKHR CreateSurface(const InstancePackPtr &instance_pack,
         throw std::runtime_error("Failed to create window surface");
     }
     // Wrap with smart handler
-    using Deleter =
-            vk::ObjectDestroy<vk::Instance, VULKAN_HPP_DEFAULT_DISPATCHER_TYPE>;
+    using Deleter = vk::detail::ObjectDestroy<vk::Instance,
+                                              VULKAN_HPP_DEFAULT_DISPATCHER_TYPE>;
     Deleter deleter(*instance_pack->instance, nullptr,
                     VULKAN_HPP_DEFAULT_DISPATCHER);
     return vk::UniqueSurfaceKHR(s_raw, deleter);
@@ -1795,7 +1796,7 @@ uint32_t AcquireNextImage(const vk::UniqueDevice &device,
     const auto ret_val = device->acquireNextImageKHR(
             swapchain_pack->swapchain.get(), timeout, semaphore_raw, fence_raw);
     if (ret_val.result != vk::Result::eSuccess) {
-        vk::throwResultException(ret_val.result, "AcquireNextImage");
+        vk::detail::throwResultException(ret_val.result, "AcquireNextImage");
     }
     return ret_val.value;
 }
@@ -2327,7 +2328,7 @@ PipelinePackPtr CreateGraphicsPipeline(
              &color_blend_state_ci, &dynamic_state_ci, pipeline_layout.get(),
              render_pass_pack->render_pass.get(), subpass_idx});
     if (pipeline_ret.result != vk::Result::eSuccess) {
-        vk::throwResultException(pipeline_ret.result, "CreateGraphicsPipeline");
+        vk::detail::throwResultException(pipeline_ret.result, "CreateGraphicsPipeline");
     }
 
     return PipelinePackPtr(new PipelinePack{std::move(pipeline_layout),
@@ -2367,7 +2368,7 @@ PipelinePackPtr CreateComputePipeline(
               shader_module->shader_module.get(), "main"},
              pipeline_layout.get()});
     if (pipeline_ret.result != vk::Result::eSuccess) {
-        vk::throwResultException(pipeline_ret.result, "CreateComputePipeline");
+        vk::detail::throwResultException(pipeline_ret.result, "CreateComputePipeline");
     }
 
     return PipelinePackPtr(new PipelinePack{std::move(pipeline_layout),
