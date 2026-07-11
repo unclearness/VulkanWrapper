@@ -30,10 +30,15 @@ END_VKW_SUPPRESS_WARNING
 // -------------------------- End third party include --------------------------
 // -----------------------------------------------------------------------------
 
+#include <array>
 #include <atomic>
 #include <functional>
-#include <map>
 #include <limits>
+#include <map>
+#include <memory>
+#include <string>
+#include <tuple>
+#include <vector>
 
 namespace vkw {
 
