@@ -615,6 +615,10 @@ std::vector<uint32_t> CompileGLSL(const vk::ShaderStageFlagBits &vk_stage,
 
     // Set source string
     glslang::TShader shader(stage);
+    // Vulkan 1.1 permits SPIR-V 1.3, which is required by the standardized
+    // subgroup arithmetic instructions used by compute training kernels.
+    shader.setEnvTarget(glslang::EShTargetSpv,
+                        glslang::EShTargetSpv_1_3);
     const char *source_strs[1] = {source.data()};
     shader.setStrings(source_strs, 1);
 
