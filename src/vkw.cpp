@@ -2346,7 +2346,8 @@ PipelinePackPtr CreateComputePipeline(
         const vk::UniqueDevice &device,
         const ShaderModulePackPtr &shader_module,
         const std::vector<DescSetPackPtr> &desc_set_packs,
-        const PipelineCachePtr &pipeline_cache) {
+        const PipelineCachePtr &pipeline_cache,
+        uint32_t required_subgroup_size) {
     // Repack descriptor set layout
     std::vector<vk::DescriptorSetLayout> desc_set_layouts;
     desc_set_layouts.reserve(desc_set_packs.size());
@@ -2365,12 +2366,24 @@ PipelinePackPtr CreateComputePipeline(
     auto pipeline_cache_raw = pipeline_cache ? pipeline_cache->get() : nullptr;
 
     // Create pipeline
+    // Some drivers (Intel Xe) compile compute shaders at a narrower SIMD
+    // width than the subgroupSize reported in device properties.  Kernels
+    // that specialize on the reported size (workgroup==subgroup reductions,
+    // scratch buffers sized on the host) then read/write out of step, so
+    // callers can pin the compile-time subgroup size explicitly via
+    // VK_EXT_subgroup_size_control.  A value of 0 keeps driver defaults.
+    vk::PipelineShaderStageRequiredSubgroupSizeCreateInfoEXT subgroup_size_ci;
+    vk::ComputePipelineCreateInfo pipeline_ci{
+            vk::PipelineCreateFlags(),
+            {vk::PipelineShaderStageCreateFlags(), shader_module->stage,
+             shader_module->shader_module.get(), "main"},
+            pipeline_layout.get()};
+    if (required_subgroup_size != 0) {
+        subgroup_size_ci.requiredSubgroupSize = required_subgroup_size;
+        pipeline_ci.stage.pNext = &subgroup_size_ci;
+    }
     auto pipeline_ret = device->createComputePipelineUnique(
-            pipeline_cache_raw,
-            {vk::PipelineCreateFlags(),
-             {vk::PipelineShaderStageCreateFlags(), shader_module->stage,
-              shader_module->shader_module.get(), "main"},
-             pipeline_layout.get()});
+            pipeline_cache_raw, pipeline_ci);
     if (pipeline_ret.result != vk::Result::eSuccess) {
         vk::detail::throwResultException(pipeline_ret.result, "CreateComputePipeline");
     }
