@@ -658,7 +658,8 @@ PipelinePackPtr CreateComputePipeline(
         const vk::UniqueDevice& device,
         const ShaderModulePackPtr& shader_module,
         const std::vector<DescSetPackPtr>& desc_set_packs,
-        const PipelineCachePtr& pipeline_cache = nullptr);
+        const PipelineCachePtr& pipeline_cache = nullptr,
+        uint32_t required_subgroup_size = 0);
 
 // -----------------------------------------------------------------------------
 // ------------------------------- Command Buffer ------------------------------
