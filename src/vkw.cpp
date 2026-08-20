@@ -187,14 +187,17 @@ void WindowDeleter(GLFWwindow *ptr) {
 // -----------------------------------------------------------------------------
 // --------------------------------- Instance ----------------------------------
 // -----------------------------------------------------------------------------
-bool IsVkDebugUtilsAvailable() {
-    const std::string DEBUG_UTIL_NAME = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+bool IsInstanceExtAvailable(const std::string &ext_name) {
     for (auto &&prop : vk::enumerateInstanceExtensionProperties()) {
-        if (std::string(prop.extensionName.data()) == DEBUG_UTIL_NAME) {
+        if (std::string(prop.extensionName.data()) == ext_name) {
             return true;
         }
     }
     return false;
+}
+
+bool IsVkDebugUtilsAvailable() {
+    return IsInstanceExtAvailable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 }
 
 std::vector<char const *> GetEnabledLayers(
@@ -252,6 +255,18 @@ std::vector<char const *> GetEnabledExts(
             ext_names.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
         }
     }
+
+    // A portability driver (MoltenVK on macOS/iOS) is only enumerated when the
+    // loader is told to include non-conformant implementations.  Without this
+    // the Apple loader reports zero physical devices and bring-up dies in
+    // GetFirstPhysicalDevice with a misleading "No physical devices".  Decided
+    // by run-time availability rather than by __APPLE__ so that no other
+    // platform changes: loaders that do not implement portability never
+    // enumerate the extension, so the list is unchanged there.
+    if (IsInstanceExtAvailable(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {
+        ext_names.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+    }
+
     return ext_names;
 }
 
@@ -928,12 +943,26 @@ InstancePackPtr CreateInstance(const std::string &app_name,
     const auto &ext_names =
             GetEnabledExts(debug_enable, surface_enable, ext_names_org);
 
+    // Enabling VK_KHR_portability_enumeration obliges us to also set its
+    // create flag; the extension alone does not make the loader enumerate
+    // portability drivers.  GetEnabledExts only adds the extension where the
+    // loader offers it, so the flag stays clear everywhere else.
+    vk::InstanceCreateFlags instance_flags = {};
+    for (auto &&ext_name : ext_names) {
+        if (std::string(ext_name) ==
+            VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) {
+            instance_flags |=
+                    vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
+            break;
+        }
+    }
+
     // Create instance
     vk::ApplicationInfo app_info = {app_name.c_str(), app_version,
                                     engine_name.c_str(), engine_version,
                                     VK_API_VERSION_1_1};
     vk::UniqueInstance instance = vk::createInstanceUnique(
-            {vk::InstanceCreateFlags(), &app_info,
+            {instance_flags, &app_info,
              static_cast<uint32_t>(layer_names.size()), DataSafety(layer_names),
              static_cast<uint32_t>(ext_names.size()), DataSafety(ext_names)});
 
