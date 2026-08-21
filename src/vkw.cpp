@@ -984,8 +984,11 @@ InstancePackPtr CreateInstance(const std::string &app_name,
              static_cast<uint32_t>(layer_names.size()), DataSafety(layer_names),
              static_cast<uint32_t>(ext_names.size()), DataSafety(ext_names)});
 
-#if VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL == 1
+#if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
     // Initialize dispatcher with Instance to get all the other function ptrs.
+    // Required whenever dynamic dispatch is on, including the statically
+    // linked ICD case (iOS) where the dlopen loader tool is disabled;
+    // skipping it leaves every instance-level pointer null.
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance);
 #endif
 
@@ -1181,8 +1184,10 @@ vk::UniqueDevice CreateDevice(uint32_t queue_family_idx,
     create_info.setPNext(features.get());  // Set features2 pointer
     vk::UniqueDevice device = physical_device.createDeviceUnique(create_info);
 
-#if VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL == 1
-    // Initialize dispatcher for device
+#if VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
+    // Initialize dispatcher for device (see the instance-level note above:
+    // this must run whenever dynamic dispatch is on, not only when the
+    // dlopen loader tool is enabled).
     VULKAN_HPP_DEFAULT_DISPATCHER.init(device.get());
 #endif
 
