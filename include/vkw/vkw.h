@@ -8,6 +8,15 @@
 #define VK_USE_PLATFORM_ANDROID_KHR
 #endif
 
+// Detect iOS (headless: no window system, no surface, MoltenVK linked
+// statically without a Vulkan loader). macOS stays on the GLFW path.
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#define VKW_PLATFORM_IOS 1
+#endif
+#endif
+
 // -----------------------------------------------------------------------------
 // ------------------------- Begin third party include -------------------------
 // -----------------------------------------------------------------------------
@@ -19,6 +28,8 @@ BEGIN_VKW_SUPPRESS_WARNING
 // ANativeWindow for android
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
+#elif defined(VKW_PLATFORM_IOS)
+// iOS is compute-only here: no windowing headers.
 #else
 // GLFW for desktop
 #define GLFW_INCLUDE_VULKAN
@@ -91,6 +102,11 @@ std::vector<float> CastFloat16To32(const std::vector<uint16_t>& f16);
 using ANativeWindowPtr = std::shared_ptr<ANativeWindow>;
 using WindowPtr = ANativeWindowPtr;
 WindowPtr InitANativeWindow(JNIEnv* jenv, jobject jsurface);
+
+#elif defined(VKW_PLATFORM_IOS)
+// iOS version: windows/surfaces are unsupported (surface_enable must stay
+// false); the opaque pointer only keeps window-typed signatures compilable.
+using WindowPtr = std::shared_ptr<void>;
 
 #else
 // GLFW version (GLFWWindow)

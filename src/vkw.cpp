@@ -28,7 +28,11 @@ END_VKW_SUPPRESS_WARNING
 vk::detail::DynamicLoader g_dynamic_loader;
 // Global Storage for Dispatcher
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
-#else
+#elif VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
+// No dlopen-able Vulkan loader (iOS: MoltenVK is linked statically). The
+// dynamic dispatcher storage is still required; it is initialized from the
+// statically linked vkGetInstanceProcAddr in CreateInstance.
+VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 #endif
 
 namespace vkw {
@@ -177,6 +181,9 @@ void WindowDeleter(ANativeWindow *ptr) {
     ANativeWindow_release(ptr);
 }
 
+#elif defined(VKW_PLATFORM_IOS)
+// iOS version: windows are unsupported; nothing to delete.
+
 #else
 // GLFW version (GLFWWindow)
 void WindowDeleter(GLFWwindow *ptr) {
@@ -237,6 +244,10 @@ std::vector<char const *> GetEnabledExts(
         // Add android surface extensions
         ext_names.push_back("VK_KHR_surface");
         ext_names.push_back("VK_KHR_android_surface");
+#elif defined(VKW_PLATFORM_IOS)
+        // The iOS build is compute-only; fail loudly rather than enable a
+        // surface path that has no window to present to.
+        throw std::runtime_error("vkw: surfaces are unsupported on iOS");
 #else
         // Add extension names required by GLFW
         uint32_t n_glfw_ext = 0;
@@ -895,6 +906,9 @@ WindowPtr InitANativeWindow(JNIEnv *jenv, jobject jsurface) {
     return WindowPtr(ptr, WindowDeleter);
 }
 
+#elif defined(VKW_PLATFORM_IOS)
+// iOS version: no window init function is declared.
+
 #else
 // GLFW version (GLFWWindow)
 WindowPtr InitGLFWWindow(const std::string &win_name, uint32_t win_w,
@@ -936,6 +950,10 @@ InstancePackPtr CreateInstance(const std::string &app_name,
             g_dynamic_loader.template getProcAddress<PFN_vkGetInstanceProcAddr>(
                     "vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(get_vk_instance_proc_addr);
+#elif VULKAN_HPP_DISPATCH_LOADER_DYNAMIC == 1
+    // Statically linked ICD (iOS/MoltenVK): the entry point comes from the
+    // link line, not from a loader dlopen.
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(::vkGetInstanceProcAddr);
 #endif
 
     // Decide Vulkan layer and extensions
@@ -1037,6 +1055,12 @@ vk::UniqueSurfaceKHR CreateSurface(const InstancePackPtr &instance_pack,
     // Create Android surface
     return instance_pack->instance->createAndroidSurfaceKHRUnique(
             {vk::AndroidSurfaceCreateFlagsKHR(), window.get()});
+}
+
+#elif defined(VKW_PLATFORM_IOS)
+// iOS version: surfaces are unsupported (see GetEnabledExts).
+vk::UniqueSurfaceKHR CreateSurface(const InstancePackPtr &, const WindowPtr &) {
+    throw std::runtime_error("vkw: surfaces are unsupported on iOS");
 }
 
 #else
