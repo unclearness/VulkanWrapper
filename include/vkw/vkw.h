@@ -8,6 +8,15 @@
 #define VK_USE_PLATFORM_ANDROID_KHR
 #endif
 
+// iOS has no GLFW: vkw runs headless there, with MoltenVK linked statically
+// (VKW_STATIC_VULKAN) because an app cannot dlopen a Vulkan loader.
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#define VKW_NO_WINDOW 1
+#endif
+#endif
+
 // -----------------------------------------------------------------------------
 // ------------------------- Begin third party include -------------------------
 // -----------------------------------------------------------------------------
@@ -19,6 +28,8 @@ BEGIN_VKW_SUPPRESS_WARNING
 // ANativeWindow for android
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
+#elif defined(VKW_NO_WINDOW)
+// No window system integration
 #else
 // GLFW for desktop
 #define GLFW_INCLUDE_VULKAN
@@ -91,6 +102,11 @@ std::vector<float> CastFloat16To32(const std::vector<uint16_t>& f16);
 using ANativeWindowPtr = std::shared_ptr<ANativeWindow>;
 using WindowPtr = ANativeWindowPtr;
 WindowPtr InitANativeWindow(JNIEnv* jenv, jobject jsurface);
+
+#elif defined(VKW_NO_WINDOW)
+// Headless: an opaque handle keeps the surface API declarable; CreateSurface
+// throws.
+using WindowPtr = std::shared_ptr<void>;
 
 #else
 // GLFW version (GLFWWindow)

@@ -24,8 +24,10 @@ END_VKW_SUPPRESS_WARNING
 #include <unordered_map>
 
 #if VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL == 1
+#if !defined(VKW_STATIC_VULKAN)
 // Global Storage for Dynamic loader
 vk::detail::DynamicLoader g_dynamic_loader;
+#endif
 // Global Storage for Dispatcher
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 #else
@@ -177,7 +179,7 @@ void WindowDeleter(ANativeWindow *ptr) {
     ANativeWindow_release(ptr);
 }
 
-#else
+#elif !defined(VKW_NO_WINDOW)
 // GLFW version (GLFWWindow)
 void WindowDeleter(GLFWwindow *ptr) {
     glfwDestroyWindow(ptr);
@@ -237,6 +239,8 @@ std::vector<char const *> GetEnabledExts(
         // Add android surface extensions
         ext_names.push_back("VK_KHR_surface");
         ext_names.push_back("VK_KHR_android_surface");
+#elif defined(VKW_NO_WINDOW)
+        throw std::runtime_error("vkw: built without window support");
 #else
         // Add extension names required by GLFW
         uint32_t n_glfw_ext = 0;
@@ -891,7 +895,7 @@ WindowPtr InitANativeWindow(JNIEnv *jenv, jobject jsurface) {
     return WindowPtr(ptr, WindowDeleter);
 }
 
-#else
+#elif !defined(VKW_NO_WINDOW)
 // GLFW version (GLFWWindow)
 WindowPtr InitGLFWWindow(const std::string &win_name, uint32_t win_w,
                          uint32_t win_h, int32_t glfw_api) {
@@ -928,9 +932,13 @@ InstancePackPtr CreateInstance(const std::string &app_name,
 #if VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL == 1
     // Initialize dispatcher with `vkGetInstanceProcAddr`, to get the instance
     // independent function pointers
+#if defined(VKW_STATIC_VULKAN)
+    PFN_vkGetInstanceProcAddr get_vk_instance_proc_addr = vkGetInstanceProcAddr;
+#else
     PFN_vkGetInstanceProcAddr get_vk_instance_proc_addr =
             g_dynamic_loader.template getProcAddress<PFN_vkGetInstanceProcAddr>(
                     "vkGetInstanceProcAddr");
+#endif
     VULKAN_HPP_DEFAULT_DISPATCHER.init(get_vk_instance_proc_addr);
 #endif
 
@@ -1033,6 +1041,12 @@ vk::UniqueSurfaceKHR CreateSurface(const InstancePackPtr &instance_pack,
     // Create Android surface
     return instance_pack->instance->createAndroidSurfaceKHRUnique(
             {vk::AndroidSurfaceCreateFlagsKHR(), window.get()});
+}
+
+#elif defined(VKW_NO_WINDOW)
+vk::UniqueSurfaceKHR CreateSurface(const InstancePackPtr &,
+                                   const WindowPtr &) {
+    throw std::runtime_error("vkw: built without window support");
 }
 
 #else
@@ -1138,6 +1152,14 @@ vk::UniqueDevice CreateDevice(uint32_t queue_family_idx,
     auto ext_names = ext_names_org;
     if (swapchain_support) {
         ext_names.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    }
+    // The spec requires enabling this one whenever the device exposes it.
+    // (Spelled out: its macro lives in vulkan_beta.h.)
+    const char *const portability_subset = "VK_KHR_portability_subset";
+    for (auto &&prop : physical_device.enumerateDeviceExtensionProperties()) {
+        if (std::string(prop.extensionName.data()) == portability_subset) {
+            ext_names.push_back(portability_subset);
+        }
     }
     const uint32_t n_ext_names = static_cast<uint32_t>(ext_names.size());
 
